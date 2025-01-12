@@ -12,8 +12,8 @@ export const KING = 'k'
 export type Piece = 'p' | 'n' | 'b' | 'r' | 'q' | 'k'
 
 export const OFFSETS:Record<string, Array<number>> = {
-    p: [16, 32, 17, 15],// black pawn attack front, 2front, left, right
-    P: [-16, -32, -17, -15],// white pawn attack front, 2front, left, right
+    p: [16, 32, 17, 15],// black pawn attack front, 2front, left, right [17,15] for enpassee action
+    P: [-16, -32, -17, -15],// white pawn attack front, 2front, left, right [-17,-15] for enpassee action
     n: [-18, -33, -31, -14, 18, 33, 31, 14],// knight moves imagine it on board hahahaha
     b: [-17, -15, 17, 15],// bishop moves
     r: [-16, 1, 16, -1],// rook moves
@@ -55,7 +55,8 @@ const BLACKPIECES:Record<string, string> = {p:'p', n:'n', b:'b', r:'r', q:'q', k
 class ChessBoard
 {
     public board:Array<Piece> = new Array(128).fill(null);
-    public turn:number = 0;
+    public turn:number = 1;
+    public halfmove:number = 0;// this will hold the number of half moves (Halfmove clock: This is the number of halfmoves since the last capture or pawn advance. The reason for this field is)
     public active:string = 'w';
     public Kings:Record<string, number> = {w:0, b:0};// this will hold the position of the kings in the 0x88 board
     public castling:Record<string, number> = {w: 0, b: 0};// this will hold 2 if king side and 3 if queen side or 5 if both 0x88 board
@@ -72,6 +73,8 @@ class ChessBoard
     public fiftyMoveRule:boolean = false;
     public threefoldRepetition:boolean = false;
     public draw:boolean = false;
+    public error:boolean = false;
+    public error_message:string = '';
 
     constructor(){
         this.initBoard();
@@ -101,6 +104,8 @@ class ChessBoard
         this.fiftyMoveRule = false;
         this.threefoldRepetition = false;
         this.draw = false;
+        this.possible_captures = {};
+        this.possible_moves_for_each_peace = {};
     }
 
     getPieceAt(index:number):Piece{
@@ -126,7 +131,7 @@ class ChessBoard
         let piece = this.board[index];
         let color = piece === piece.toUpperCase() ? 'w' : 'b';
         let pieceType = (piece.toLowerCase() === 'p') ? piece : piece.toLowerCase();
-        console.log(pieceType);
+        // console.log(pieceType);
         let offset:number[] = OFFSETS[pieceType];
     
         for (let i = 0; i < offset.length; i++){
@@ -135,7 +140,7 @@ class ChessBoard
             while (true)
             {
                 next += offset[i];
-                console.log(piece,index,next);
+                // console.log(piece,index,next);
                 // check if the piece is out of the board
                 if ((next & 0x88) !== 0){
                     break;
@@ -143,6 +148,32 @@ class ChessBoard
                 // in case of empty square
                 if (this.board[next] === null)
                 {
+                    // check if the piece is a pawn
+                    if (pieceType === 'p' || pieceType === 'P'){
+                        // check if the Offset is for enpassants
+                        if (offset[i] === 17 || offset[i] === 15 || offset[i] === -17 || offset[i] === -15){
+                            // chech if the next is enpassant square
+                            if (next === this.enpassant){
+                                this.availbleMoves.push(new Move(index, next, piece, color));
+                                // add the possible moves for the current piece
+                                if (!this.possible_moves_for_each_peace[index]) {
+                                    // If the key does not exist, initialize it as an empty array
+                                    this.possible_moves_for_each_peace[index] = [];
+                                }
+                                this.possible_moves_for_each_peace[index].push(next);
+                                // add the possible captures for the current player
+                                if (!this.possible_captures[index]) {
+                                    // If the key does not exist, initialize it as an empty array
+                                    this.possible_captures[index] = [];
+                                }
+                                this.possible_captures[index].push(next);
+                                break;
+                            }
+                            else{
+                                break;
+                            }
+                        }
+                    }
                     this.availbleMoves.push(new Move(index, next, piece, color));
                     // add the possible moves for the current piece
                     if (!this.possible_moves_for_each_peace[index]) {
@@ -184,7 +215,7 @@ class ChessBoard
                     }
                 }
 
-                if (pieceType === 'p' || pieceType === 'k' || pieceType === 'n'){
+                if (pieceType === 'p' ||  pieceType === 'P' || pieceType === 'k' || pieceType === 'n'){
                     break;
                 }
             }
@@ -202,13 +233,183 @@ class ChessBoard
             if (this.board[i] === null)
                 continue;
             if((i & 0x88) === 0 && this.isActivesPiece(i)){
-                console.log(i);
+                // console.log(i);
                 this.gen_moves(i);
             }
             // if (this.board[i] === null)
             //     console.log(i);
-        }   
+        }
+
+        for (const move of this.availbleMoves){
+            console.log(move.from, move.to, move.piece, move.color);
+        }
+
+        for (const key in this.possible_captures){
+            console.log(key, this.possible_captures[key]);
+        }
+
+        for (const key in this.possible_moves_for_each_peace){
+            console.log(key, this.possible_moves_for_each_peace[key]);
+        }
         return this.availbleMoves.length;
+    }
+
+    load(fen_map:string):boolean{
+        this.initBoard();
+        this.board = new Array(128).fill(null);
+        let fen = fen_map.split(' ');
+        let fen_board = fen[0];
+        let fen_turn = fen[1];
+        let fen_castling = fen[2];
+        let fen_enpassant = fen[3];
+        let fen_halfmove = fen[4];
+        let fen_fullmove = fen[5];
+
+        // check if the fen is valid
+        console.log(fen_board, fen_turn, fen_castling, fen_enpassant, fen_halfmove, fen_fullmove);
+        let fen_board_rows = fen_board.split('/');
+        if (fen_board_rows.length !== 8){
+            return false;
+        }
+        // load the board
+        let middle:string = "";
+        for (let i = 0; i < fen_board.length; i++){
+            if (fen_board[i] === '/'){
+                continue;
+            }
+            if (fen_board[i].toLowerCase() in WHITEPIECES || fen_board[i].toLowerCase() in BLACKPIECES){
+                middle += fen_board[i];
+            }else if (fen_board[i] >= '1' && fen_board[i] <= '8'){
+                let count = parseInt(fen_board[i]);
+                middle += ' '.repeat(count);
+            }
+            else
+            {
+                console.log("middle:", middle, "[",fen_board[i]);
+                return false;
+            }
+        }
+        console.log("middle:", middle);
+        let index = 0;
+        for (let i = 0; i < 128; i++)
+        {
+            if ((i & 0x88) === 0){
+                if (middle[index] !== ' '){
+                    this.board[i] = middle[index] as Piece;
+                }
+                index++;
+            }
+        }
+        // load the turn
+        this.turn = parseInt(fen_turn);
+        // load the castling
+        this.castling = {w: 0, b: 0};
+        for (let i = 0; i < fen_castling.length; i++){
+            if (fen_castling[i] === 'K'){
+                this.castling.w |= 2;
+            }
+            if (fen_castling[i] === 'Q'){
+                this.castling.w |= 4;
+            }
+            if (fen_castling[i] === 'k'){
+                this.castling.b |= 2;
+            }
+            if (fen_castling[i] === 'q'){
+                this.castling.b |= 4;
+            }
+            if (fen_castling[i] !== '-' && fen_castling[i] !== 'K' && fen_castling[i] !== 'Q' && fen_castling[i] !== 'k' && fen_castling[i] !== 'q')
+                return false;
+        }
+
+        // load the enpassant
+        if (fen_enpassant === '-'){
+            this.enpassant = -1;
+        }
+        else if (fen_enpassant in Ox88){
+            this.enpassant = Ox88[fen_enpassant];
+        }
+        else{
+            return false;
+        }
+        // load the halfmove
+        if (!isNaN(parseInt(fen_halfmove))){
+            this.halfmove = parseInt(fen_halfmove);
+        }
+        else
+            return false;
+        // load the fullmove
+        if (!isNaN(parseInt(fen_fullmove))){
+            this.turn = parseInt(fen_fullmove);
+        }
+        else
+            return false;
+        return true;
+    }
+
+    getFen():string{
+        let fen = '';
+        for (let i = 0; i < 128; i++){
+            if ((i & 0x88) === 0){
+                if (this.board[i] === null){
+                    fen += ' ';
+                }
+                else{
+                    fen += this.board[i];
+                }
+            }
+        }
+        fen += ' ';
+        fen += this.active;
+        fen += ' ';
+        if (this.castling.w === 0 && this.castling.b === 0){
+            fen += '-';
+        }
+        else{
+            if (this.castling.w & 2){
+                fen += 'K';
+            }
+            if (this.castling.w & 4){
+                fen += 'Q';
+            }
+            if (this.castling.b & 2){
+                fen += 'k';
+            }
+            if (this.castling.b & 4){
+                fen += 'q';
+            }
+        }
+        fen += ' ';
+        if (this.enpassant === -1){
+            fen += '-';
+        }
+        else{
+            for (const key in Ox88){
+                if (Ox88[key] === this.enpassant){
+                    fen += key;
+                }
+            }
+        }
+        fen += ' ';
+        fen += this.halfmove;
+        fen += ' ';
+        fen += this.turn;
+        return fen;
+    }
+
+    load_fen(fen:string):boolean{
+        console.log(fen);
+        let fen_map = fen.split(' ');
+        if (fen_map.length !== 6){
+            this.error = true;
+            this.error_message = 'Invalid FEN';
+            return false;
+        }
+        if (!this.load(fen)){
+            this.error = true;
+            this.error_message = 'Invalid 2 FEN';
+            return false;
+        }
+        return true;
     }
 }
 
