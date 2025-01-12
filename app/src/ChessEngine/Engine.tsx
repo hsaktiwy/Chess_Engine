@@ -63,9 +63,10 @@ class ChessBoard
     public history:Array<Move> = [];
     public availbleMoves:Array<Move> = [];
     public possible_captures:Record<number, Array<number>>={};// this will hold the possible captures for the current player
+    public possible_moves_for_each_peace:Record<number, Array<number>>={};// this will have the possible moves for each peace
     public gameover:boolean = false;
-    public winner:string = '';
     public check:boolean = false;
+    public winner:string = '';
     public checkmate:boolean = false;
     public stalemate:boolean = false;
     public fiftyMoveRule:boolean = false;
@@ -80,7 +81,8 @@ class ChessBoard
         let default_index = 0;
         for(let i = 0; i < 128; i++){
             if((i & 0x88) === 0){
-                this.board[i] =     DEFAULT_BOARD[default_index] as Piece;
+                if (DEFAULT_BOARD[default_index] !== ' ')
+                    this.board[i] =  DEFAULT_BOARD[default_index] as Piece;
                 default_index++;
             }
         }
@@ -119,25 +121,36 @@ class ChessBoard
         return false;
     }
 
-    gen_moves(index:number){
+    gen_moves(index:number, ){
         // identify the piece moves then check if the move is valid
         let piece = this.board[index];
         let color = piece === piece.toUpperCase() ? 'w' : 'b';
-        let pieceType = piece.toLowerCase();
-        let offset = OFFSETS[pieceType];
+        let pieceType = (piece.toLowerCase() === 'p') ? piece : piece.toLowerCase();
+        console.log(pieceType);
+        let offset:number[] = OFFSETS[pieceType];
     
         for (let i = 0; i < offset.length; i++){
             let next = index;
+            // check for next possible moves depending  on the offset
             while (true)
             {
                 next += offset[i];
+                console.log(piece,index,next);
                 // check if the piece is out of the board
                 if ((next & 0x88) !== 0){
                     break;
                 }
                 // in case of empty square
                 if (this.board[next] === null)
+                {
                     this.availbleMoves.push(new Move(index, next, piece, color));
+                    // add the possible moves for the current piece
+                    if (!this.possible_moves_for_each_peace[index]) {
+                        // If the key does not exist, initialize it as an empty array
+                        this.possible_moves_for_each_peace[index] = [];
+                    }
+                    this.possible_moves_for_each_peace[index].push(next);
+                }
                 // in case of not empty square
                 if (this.board[next] !== null)
                 {
@@ -151,25 +164,51 @@ class ChessBoard
                     // in case of enemy piece
                     if (color !== nextColor){
                         this.availbleMoves.push(new Move(index, next, piece, color));
-                        // in case of the king we will have a threat (check)
-                        if (nextPiece.toLowerCase() === 'k'){
-                            this.check = true;
-                            this.possible_captures[index] = [next];
+                        // add the possible moves for the current piece
+                        if (!this.possible_moves_for_each_peace[index]) {
+                            // If the key does not exist, initialize it as an empty array
+                            this.possible_moves_for_each_peace[index] = [];
                         }
+                        this.possible_moves_for_each_peace[index].push(next);
+                        // add the possible captures for the current player
+                        if (!this.possible_captures[index]) {
+                            // If the key does not exist, initialize it as an empty array
+                            this.possible_captures[index] = [];
+                        }
+                        this.possible_captures[index].push(next);
+                        // in case of the king we will have a threat (check)
+                        // //if (nextPiece.toLowerCase() === 'k'){
+                        //  //    this.possible_captures[index].push(next);
+                        // //}
                         break;
                     }
+                }
+
+                if (pieceType === 'p' || pieceType === 'k' || pieceType === 'n'){
+                    break;
                 }
             }
         }
     }
 
-    _availble_moves()
+    _get_active_availble_moves():number
     {
+        this.availbleMoves = [];
+        this.possible_captures = {};
+        this.possible_moves_for_each_peace = {};
         for(let i = 0; i < 128; i++){
-            if((i & 0x88) === 0 && this.board[i] !== null && this.isActivesPiece(i)){
+            // avoid null square
+            // console.log(this.board[i], i);
+            if (this.board[i] === null)
+                continue;
+            if((i & 0x88) === 0 && this.isActivesPiece(i)){
+                console.log(i);
                 this.gen_moves(i);
             }
-        }
+            // if (this.board[i] === null)
+            //     console.log(i);
+        }   
+        return this.availbleMoves.length;
     }
 }
 

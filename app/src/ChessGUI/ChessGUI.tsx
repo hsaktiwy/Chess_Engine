@@ -69,9 +69,10 @@ const ChessGUI: React.FC = () => {
     return isLightSquare ? 'bg-white' : 'bg-gray-400';
   };
   let  Chess:ChessBoard = new ChessBoard();
+  let possible_actions:number = Chess._get_active_availble_moves();
   return (
     <div className="flex flex-col items-center p-4">
-      {Chess.board}
+      {Chess.board+ " possible action number: " + possible_actions}
       <div className="border-2 border-gray-800">
         {board.map((row, rowIndex) => (
           <div key={rowIndex} className="flex">
