@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import ChessBoard from '../ChessEngine/Engine.tsx';
 
 type Piece = 'r' | 'n' | 'b' | 'q' | 'k' | 'p' | 'R' | 'N' | 'B' | 'Q' | 'K' | 'P' | '';
 type Board = Piece[][];
@@ -67,9 +68,10 @@ const ChessGUI: React.FC = () => {
     }
     return isLightSquare ? 'bg-white' : 'bg-gray-400';
   };
-
+  let  Chess:ChessBoard = new ChessBoard();
   return (
     <div className="flex flex-col items-center p-4">
+      {Chess.board}
       <div className="border-2 border-gray-800">
         {board.map((row, rowIndex) => (
           <div key={rowIndex} className="flex">
