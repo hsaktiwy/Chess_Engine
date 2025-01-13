@@ -10,6 +10,8 @@ export const ROOK = 'r'
 export const QUEEN = 'q'
 export const KING = 'k'
 export type Piece = 'p' | 'n' | 'b' | 'r' | 'q' | 'k'
+export type PromotionPiece = 'n' | 'b' | 'r' | 'q'
+
 
 export const OFFSETS:Record<string, Array<number>> = {
     p: [16, 32, 17, 15],// black pawn attack front, 2front, left, right [17,15] for enpassee action
@@ -38,16 +40,25 @@ class Move{
     public to:number;
     public piece:Piece;
     public color:string;
+    public castlin:boolean;
+    public Kcastling:boolean;
+    public Qcastling:boolean;
+    public Promotion:boolean;
+    public PromotionType:PromotionPiece;
 
-    constructor(from:number, to:number, piece:Piece, color:string){
+    constructor(from:number, to:number, piece:Piece, color:string, castlin:boolean = false, Kcastling:boolean=false, Qcastling:boolean=false, Promotion:boolean = false, PromotionType:PromotionPiece = 'q'){
         this.from = from;
         this.to = to;
         this.piece = piece;
         this.color = color;
+        this.castlin = castlin;
+        this.Kcastling = Kcastling;
+        this.Qcastling = Qcastling;
+        this.Promotion = Promotion;
+        this.PromotionType = PromotionType;
     }
-    
 }
-const INI_KINGS_POS:Record<string, number> = {w:4, b:116};
+const INI_KINGS_POS:Record<string, number> = {w:116, b:4};
 const DEFAULT_BOARD:string = 'rnbqkbnrpppppppp                                PPPPPPPPRNBQKBNR'
 const WHITEPIECES:Record<string, string> = {p:'P', n:'N', b:'B', r:'R', q:'Q', k:'K'}
 const BLACKPIECES:Record<string, string> = {p:'p', n:'n', b:'b', r:'r', q:'q', k:'k'}
@@ -58,7 +69,7 @@ class ChessBoard
     public turn:number = 1;
     public halfmove:number = 0;// this will hold the number of half moves (Halfmove clock: This is the number of halfmoves since the last capture or pawn advance. The reason for this field is)
     public active:string = 'w';
-    public Kings:Record<string, number> = {w:0, b:0};// this will hold the position of the kings in the 0x88 board
+    public Kings:Record<string, number> = {w:116, b:5};// this will hold the position of the kings in the 0x88 board
     public castling:Record<string, number> = {w: 0, b: 0};// this will hold 2 if king side and 3 if queen side or 5 if both 0x88 board
     public enpassant:number = -1;// this will hold the position of the enpassant square in the 0x88 board
     public history:Array<Move> = [];
@@ -75,6 +86,7 @@ class ChessBoard
     public draw:boolean = false;
     public error:boolean = false;
     public error_message:string = '';
+    public attacking_squares:Array<number> = [];
 
     constructor(){
         this.initBoard();
@@ -89,6 +101,7 @@ class ChessBoard
                 default_index++;
             }
         }
+        this.Kings=INI_KINGS_POS;
         this.castling = {w: 5, b: 5};
         this.Kings = INI_KINGS_POS
         this.turn = 1;
@@ -106,6 +119,9 @@ class ChessBoard
         this.draw = false;
         this.possible_captures = {};
         this.possible_moves_for_each_peace = {};
+        this.error = false;
+        this.error_message = '';
+        this.attacking_squares = [];
     }
 
     getPieceAt(index:number):Piece{
@@ -228,32 +244,73 @@ class ChessBoard
         this.possible_captures = {};
         this.possible_moves_for_each_peace = {};
         for(let i = 0; i < 128; i++){
-            // avoid null square
-            // console.log(this.board[i], i);
             if (this.board[i] === null)
                 continue;
             if((i & 0x88) === 0 && this.isActivesPiece(i)){
                 // console.log(i);
                 this.gen_moves(i);
             }
-            // if (this.board[i] === null)
-            //     console.log(i);
         }
 
-        for (const move of this.availbleMoves){
-            console.log(move.from, move.to, move.piece, move.color);
-        }
+        // for (const move of this.availbleMoves){
+        //     console.log(move.from, move.to, move.piece, move.color);
+        // }
 
-        for (const key in this.possible_captures){
-            console.log(key, this.possible_captures[key]);
-        }
+        // for (const key in this.possible_captures){
+        //     console.log(key, this.possible_captures[key]);
+        // }
 
-        for (const key in this.possible_moves_for_each_peace){
-            console.log(key, this.possible_moves_for_each_peace[key]);
-        }
+        // for (const key in this.possible_moves_for_each_peace){
+        //     console.log(key, this.possible_moves_for_each_peace[key]);
+        // }
         return this.availbleMoves.length;
     }
 
+    isCheck():boolean{
+        let king = this.active === 'w' ? 'K' : 'k';
+        let king_index = this.Kings[this.active];
+        let king_state:boolean = false;
+        for (let i = 0; i < 128; i++){
+            if (this.board[i] === null)
+                continue;
+            if ((i & 0x88) === 0 && this.board[i].toLowerCase() !== king){
+                this.gen_moves(i);
+                if (this.possible_moves_for_each_peace[i] && this.possible_moves_for_each_peace[i].length > 0){
+                    if (!this.isActivesPiece(i))
+                    {
+                        for (const move of this.possible_moves_for_each_peace[i]){
+                            if (move === king_index){
+                                king_state = true;
+                                this.attacking_squares.push(i);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return king_state;
+    }
+
+    // ischeckmate():boolean{
+    //     // check if the king moves are contered
+    //     let king = this.active === 'w' ? 'K' : 'k';
+    //     let king_index = this.Kings[this.active];
+    //     if ()
+    //         for ()
+    // }
+    evaluation()
+    {
+        // check if the current player is in check
+        this.check = this.isCheck();// check if the current player is in check and get all the attacking squares + all possible moves
+        // check if the current player is in checkmate (in case of a check could not be avoided)
+        if (this.check){
+            this.checkmate = this.ischeckmate();
+        }
+        console.log("check:", this.check, "checkmate:", this.checkmate);
+        console.log("attacker", this.attacking_squares);
+    }
+
+    // FEN LOADER TOOL
     load(fen_map:string):boolean{
         this.initBoard();
         this.board = new Array(128).fill(null);
@@ -346,6 +403,7 @@ class ChessBoard
         return true;
     }
 
+    // GET THE FEN BOARD FORMAT 
     getFen():string{
         let fen = '';
         for (let i = 0; i < 128; i++){
@@ -396,6 +454,7 @@ class ChessBoard
         return fen;
     }
 
+    // FEN loader
     load_fen(fen:string):boolean{
         console.log(fen);
         let fen_map = fen.split(' ');

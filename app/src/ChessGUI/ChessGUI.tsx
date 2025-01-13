@@ -116,7 +116,8 @@ const ChessGUI: React.FC = () => {
   
   // load fen string
   // chessEngine.load_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
-  chessEngine.load_fen("rnb1kbnr/pppp1ppp/8/4p3/8/5N2/PPPPPPPP/RNBQKB1R b KQkq - 1 2");
+  chessEngine.load_fen("rnb1kbnr/ppp2ppp/3p4/4p3/5P1q/8/PPPPP1PP/RNBQKBNR b KQkq f3 0 1");
+  chessEngine.evaluation();
   console.log(chessEngine.board);
   console.log(chessEngine.error, chessEngine.error_message);
 
@@ -180,6 +181,8 @@ const ChessGUI: React.FC = () => {
     // If clicking the same square, deselect it
     if (selectedSquare.row === row && selectedSquare.col === col) {
       setSelectedSquare(null);
+      const fromIndex = toEngineIndex(selectedSquare.row, selectedSquare.col);
+      console.log(chessEngine.possible_moves_for_each_peace[fromIndex]);
       return;
     }
 
